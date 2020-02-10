@@ -1,6 +1,6 @@
 # Marshallable types/objects
 
-As programmer, we have to model our business as accuratly as possible in our software. To do that we use types or objects depending of what our prefered language offers us. But, this task can be hard as long as we have to communicate with the outside world via database, API, etc. It is easy to mix everything up and be chained when a new feature comes..
+As programmer, our goal is to model our business as accuratly as possible. To do so, we  can use types or objects depending of what our prefered language offers. But, this task can be hard as long as we have to communicate with the outside world. As long as the time goes by, those types/objects tend to be infected by the technical ones, used for the outside world. And when a new feature comes, everything is coupled and we are chained...
 
 A solution can be to use intermediate types or objects, sometimes called `data acces object (DAO)` or `data transfert object (DTO)` or published language in Domain driven development world. Let's call the **marshallable types**.
 
