@@ -38,13 +38,13 @@ instance ToRow Product where
  toRow product =
    [ toField (productId product)
    , toField (label product)
-   , toField (toInteger $ price product)
    , toField (description product)
+   , toField (toInteger $ price product)
    ]
 
 instance FromRow Product where
   fromRow = do
-   (amount, currency) <- (,) <$> field <*> field
-   let msd = fromSomeDiscrete $ mkSomeDiscrete currency sc amount
-       sc = scale (Proxy :: Proxy (UnitScale "EUR" "cent"))
-   Product <$> field <*> field <*> maybe (fail "Currency not supported") pure msd <*> field
+   let sc = scale (Proxy :: Proxy (UnitScale "EUR" "cent")) --Used scale
+   sd <- mkSomeDiscrete <$> field <*> pure sc <*> field     --Function for serialization
+   let msd = fromSomeDiscrete sd                            --Transformation to Maybe Discrete
+   Product <$> field <*> field <*> maybe (fail "Currency not supported") pure msd <*> field 
