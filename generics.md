@@ -1,9 +1,9 @@
 # Generics
 
 
-When I say `Generics`, you probably think "boilerplate saver". Its true, `Generics` are time saverq when you need to transform a type to communicate outside your application. But, what if `Generics` give us more than this?
+When I say `Generics`, you probably think "boilerplate saver". Its true, `Generics` could avoid you a lot of work when you need to transform a type to communicate outside your application. But, what if `Generics` give us more than that?
 
-`Generics` can be seen as a good way to document your interface or to have a code generator for your client (if an API is implemented) or just a way to architect your code and separate your domain from the interface.
+`Generics` can be seen as a good way to document your interface, to have a code generator for your client (if an API is implemented) or just a way to architect the code and separate the domain from the interfaces.
 
 However, this article is not about how the `Generics` work, but about the many and very useful "side effects" that you gain using them.
 
@@ -11,14 +11,14 @@ However, this article is not about how the `Generics` work, but about the many a
 
 To be efficient, the type implementing the `Generic` instance must be as close as possible to the wanted representation.
 
-For example, imagine we need to manipulate a type with a _price_ in our domain and we use the [safe-money library](htytps://ren.zone/articles/safe-money). 
+For example, imagine we have a _product_ with a _price_ in our domain and we use the [safe-money library](htytps://ren.zone/articles/safe-money) to represent it because we care about the _currency_. 
 
 ```Haskell
 > 2 :: Dense "EUR"
 Dense "EUR" 2%1    -- EUR 2.00
 ```
 
-You domain type could looks like this : 
+Our domain type could looks like this : 
 
 ```Haskell
 data Product = 
@@ -36,18 +36,20 @@ But the `Dense` type contains 2 **essentials** information that we need to store
 We will than need 2 columns in our database : 
 
 ```Sql
-CREATE TABLE product(
-    ProducID int,
-    Label varchar(255),
-    Amount int,
-    Currency String
-)
+CREATE TABLE product (
+    id SERIAL PRIMARY KEY,
+    label text NOT NULL,
+    price_in_cent integer NOT NULL,
+    currency text NOT NULL
+);
 ```
 
 We could write a custom implementation for our `Product` type.
 
 
 ```Haskell
+
+
 
 ```
 
