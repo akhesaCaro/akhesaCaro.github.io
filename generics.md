@@ -1,9 +1,9 @@
 # Generics
 
 
-When I say `Generics`, you probably think "boilerplate saver". Its true, `Generics` could avoid you a lot of work when you need to transform a type to communicate outside your application. But, what if `Generics` give us more than that?
+When I say `Generics`, you probably think "boilerplate saver". Its true, `Generics` could avoid you a lot of work when you need to serialize a type to communicate outside your application. But, what if `Generics` give us more than that?
 
-`Generics` can be seen as a good way to document your interface, to have a code generator for your client (if an API is implemented) or just a way to architect the code and separate the domain from the interfaces.
+`Generics` can be seen as a good way to document your interface, to have a code generator for your client or just a way to put amore architecture by separating the domain from the interfaces.
 
 However, this article is not about how the `Generics` work, but about the many and very useful "side effects" that you gain using them.
 
@@ -11,11 +11,13 @@ However, this article is not about how the `Generics` work, but about the many a
 
 To be efficient, the type implementing the `Generic` instance must be as close as possible to the wanted representation.
 
-For example, imagine we have a _product_ with a _price_ in our domain and we use the [safe-money library](htytps://ren.zone/articles/safe-money) to represent it because we care about the _currency_. 
+For example, imagine we have a _product_ with a _price_ with its _currency_ in our domain and we use the [safe-money library](htytps://ren.zone/articles/safe-money) to represent it.
+
 
 ```Haskell
-> 2 :: Dense "EUR"
-Dense "EUR" 2%1    -- EUR 2.00
+-- The Discrete is represented by its currency, its scale and amount.
+> 1 :: Discrete "EUR" "cent"
+Discrete "EUR" 100%1 1           -- 0.01 EUR
 ```
 
 Our domain type could looks like this : 
@@ -34,7 +36,7 @@ data Product =
 
 ```
 
-Now we need to store this record into a Database. For istance, let say that we have a `PostgreSQL` database and we are using [postgresql-simple](https://hackage.haskell.org/package/postgresql-simple-0.6.2/docs/Database-PostgreSQL-Simple.html). We will need a `FromRow` and `ToRow` instance for our type.
+Now we need to store this record into a Database. Let say that we have a `PostgreSQL` database and we are using [postgresql-simple](https://hackage.haskell.org/package/postgresql-simple-0.6.2/docs/Database-PostgreSQL-Simple.html).
 
 But the `Dense` type contains 2 **essentials** information that we need to store : The _amount_ **and** the _currency_.
 We are going to need 2 columns in our database : 
@@ -47,12 +49,14 @@ CREATE TABLE product (
     currency text NOT NULL
 );
 ```
-
-We could write a custom implementation for our `Product` type.
+We will need a `FromRow` and `ToRow` instance for our type. We could write a custom implementation for our `Product` type.
 
 
 ```Haskell
 {-# LANGUAGE DataKinds #-}
+
+import Database.PostgreSQL.Simple.FromRow
+import Database.PostgreSQL.Simple.toRow
 
 instance ToRow Product where
  toRow product =
@@ -82,11 +86,11 @@ What if we create a separate type for the Database and use an Generic instance i
 ```haskell
 data ProductDB = ProductDB -- This is our documentation
   { id :: Int
-  , label :: String
-  , amount :: Int
-  , currency :: String
-  , description :: String
-  } deriving Generic, FromRow, ToRow
+  , label :: Text
+  , amount :: Integer
+  , currency :: Text
+  , description :: Text
+  } deriving Generic, (FromRow, ToRow)
 
 toProductDB :: Product -> ProductDB
 toProductDB Product{..} =
@@ -105,11 +109,11 @@ fromProductDB ProductDB {..} =
         sd = mkSomeDiscrete currency unitScale amount
 ```
 
-Great! Now we have an _exact reprsentation_ of the produced database schema. We don't have to overload our mind to "run the algortihm" and have a mind representation of the produced schema.
+Great! Now we have an _exact reprsentation_ of the produced database schema. We don't have to overload our mind to "run the algortihm" to have a representation of the produced schema.
 
-What if my domain type has the same exact representation than my Database schema or my JSON, I don't need a marshallable type and, don't I?
+What if my domain type has the same exact representation than my Database schema or my JSON, I don't need a marshallable type, don't I?
 
-Well you don't need it ... yet, but maybe you will one day. Domain tend to change over time and separate the domain from the interface could be useful. We will se in the next section. 
+Well you don't need it ... yet, but maybe you will one day. Domain tend to change over time and separate the domain from the interface could be useful. 
 
 ## Generics as an architecture design
 
@@ -119,44 +123,44 @@ Interfaces are somehow contracts with the outside world. Sometimes we have the c
 
 We could say that interfaces have **a stricter constraint**, because if something is changed, as little as it could be, it could broke something elsewhere... The worst of it... our beloved compiler will not even be able to notice the broken issue. :fear:
 
-I think its a good thing to separate the domain world from the interfaces with different types. This way, it's more reassuring to change something and it is obiously easier to restraint the change scope than with a mega-type design.
+I think its a good thing to separate the domain world from the interfaces with different types. This way, it's more reassuring to change something and it is obiously easier to restraint the change scope than with a "mega-type" design.
 
-If you need to change something in the sensible part (interface), you will be consciously more careful to not broke _THE_ contract.
+If you need to change something in the sensible part (interface), you will be consciously more careful to not break _THE_ contract.
 
 ** GRAPH? **
 
 This way of designing code reminds me what Domaine Driven Development enthousiasts call [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/).
 
-So `Generics` tend to help you to architecture your code while naturraly separing the interfaces from the core (domain) and make your code more layered!
+So `Generics` tend to help you to architecture your code by naturraly separing the interfaces from the core (domain) and make your code more layered!
 
-Is someday you need the change all the layers, you can easily do _incremental compilation_ by change a layer at a time.
+If someday you need the change all the layers, you can easily do _incremental compilation_ by changing a layer at a time.
 
 ## Generics as a lingua franca
 
 Okay, so we have the documentation, we have a neat design, what else could **Generics** give us?
 
-The way Generics work is that it creates a **structure representation** of the type. Instead of having a mapping between the origin and the destination (for example a List to a JSON), you have a representation of it. So if you need to code a converter, it won't broke on the simple change. 
+The way Generics work is that it creates a **structure representation** of the type. Instead of parsin the type and give de correspondance, it gives a "description" of the type. Code converter using `Generics` are more robust to changes. 
 
 ### Code generator
 
 Many code generators working with `Generics` are availables. Particulary for API client accessors.
 
-For example, from an Haskell `Servant` API, you could generate a [Purescript accessors functions](https://hackage.haskell.org/package/servant-purescript) or a [ELM accessors functions](https://hackage.haskell.org/package/servant-elm) client, and keep the type safety that we all love. But the requirement for thoses nice libraries to work is that your type need to implements `Generics`.
+For example, from an Haskell `Servant` API, you could generate [Purescript accessors functions](https://hackage.haskell.org/package/servant-purescript) from a `servant` API or a [ELM accessors functions](https://hackage.haskell.org/package/servant-elm). This way, it is easier to kepp the typesafety we all love. To use them, the type must implements `Generics`.
 
 ### Swagger generator
 
 If you did work with APIs, you probably heard or used [swagger](https://swagger.io/) as an API documentation. You can obiously generate this documentation, if you implement generics with [servant-swagger](https://github.com/haskell-servant/servant-swagger).
 
-BUT! Another nice thing about Swagger is that its shared by the whole community, technologicallywise. So if you setup a public API with Swagger, anyone who wants to use it generate their [accessors](https://github.com/swagger-api/swagger-codegen), even in non FP technologies.
+BUT! Another nice feature of Swagger, is its whole community shared way to document an API, technologicallywise. So if you setup a public API with Swagger, anyone who wants to use it could generate their [accessors](https://github.com/swagger-api/swagger-codegen) with the language they want, even in non FP technologies.
 
-In the API world, `Generics` give you a lingua franca for your client! 
+In the API world, `Generics` give you a "lingua franca" for your client! 
 
 ## Conclusion
 
 In summary, in addition of being a **boilerplate saver**, `Generics` give you a lot a other nice features, such as : 
 
 - Direct interface documentation in your code (any kind of interface).
-- Some robus client accessor code generators (API). 
+- Some robus client accessor functions code generators (API). For instance for [Purescript](https://hackage.haskell.org/package/servant-purescript) or [ELM](https://hackage.haskell.org/package/servant-elm). 
 - A Swagger documentation generator ([servant-swagger](https://github.com/haskell-servant/servant-swagger))
 - And once you have a Swagger documentation, you have a [lingua franca](https://github.com/swagger-api/swagger-codegen) for any other technology that needs to access your API.
 
