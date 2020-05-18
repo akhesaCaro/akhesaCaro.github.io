@@ -135,9 +135,7 @@ Is someday you need the change all the layers, you can easily do _incremental co
 
 Okay, so we have the documentation, we have a neat design, what else could **Generics** give us?
 
-The way Generics work is that it creates a ____ of the type. This ___ is useful for anyone who need to do serialization. 
-
-Instead of having a mapping between the origin and the destination (for example a List to a JSON), you have a representation of it. So if you need to code a converter, it won't broke on the simple change. 
+The way Generics work is that it creates a **structure representation** of the type. Instead of having a mapping between the origin and the destination (for example a List to a JSON), you have a representation of it. So if you need to code a converter, it won't broke on the simple change. 
 
 ### Code generator
 
