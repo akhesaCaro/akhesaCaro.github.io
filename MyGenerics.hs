@@ -12,7 +12,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric         #-}
-
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE RecordWildCards #-}
 
 import Money
 import Database.PostgreSQL.Simple
@@ -28,23 +29,25 @@ main :: IO ()
 main = undefined
 
 data Product =
-    Product { productId :: UUID
+    Product { productId :: Int
             , label :: Text
             , price :: Discrete "EUR" "cent"
             , description :: Text
-            }
+            } deriving Show
 
 instance ToRow Product where
  toRow product =
    [ toField (productId product)
    , toField (label product)
-   , toField (description product)
    , toField (toInteger $ price product)
+   , toField (discreteCurrency $ price product)
+   , toField (description product)
    ]
 
 instance FromRow Product where
   fromRow = do
-   let sc = scale (Proxy :: Proxy (UnitScale "EUR" "cent")) --Used scale
-   sd <- mkSomeDiscrete <$> field <*> pure sc <*> field     --Function for serialization
-   let msd = fromSomeDiscrete sd                            --Transformation to Maybe Discrete
-   Product <$> field <*> field <*> maybe (fail "Currency not supported") pure msd <*> field 
+   let unitScale = scale (Proxy :: Proxy (UnitScale "EUR" "cent"))  --Used scale
+   sd <- mkSomeDiscrete <$> field <*> pure unitScale <*> field      --Function for serialization
+   case fromSomeDiscrete sd of                                      --Transformation to Maybe Discrete
+     Nothing -> fail "Currency not supported"
+     Just val -> Product <$> field <*> field <*> pure val <*> field --Product creation

@@ -21,10 +21,14 @@ Dense "EUR" 2%1    -- EUR 2.00
 Our domain type could looks like this : 
 
 ```Haskell
+{-# LANGUAGE DataKinds #-}
+
+import Money
+
 data Product = 
-    Product { id :: UUID
+    Product { id :: Int
             , label :: String
-            , price :: Dense
+            , price :: Dense "EUR"
             , description :: String
             }
 
@@ -33,7 +37,7 @@ data Product =
 Now we need to store this record into a Database. For istance, let say that we have a `PostgreSQL` database and we are using [postgresql-simple](https://hackage.haskell.org/package/postgresql-simple-0.6.2/docs/Database-PostgreSQL-Simple.html). We will need a `FromRow` and `ToRow` instance for our type.
 
 But the `Dense` type contains 2 **essentials** information that we need to store : The _amount_ **and** the _currency_.
-We will than need 2 columns in our database : 
+We are going to need 2 columns in our database : 
 
 ```Sql
 CREATE TABLE product (
@@ -48,60 +52,90 @@ We could write a custom implementation for our `Product` type.
 
 
 ```Haskell
+{-# LANGUAGE DataKinds #-}
 
+instance ToRow Product where
+ toRow product =
+   [ toField (productId product)
+   , toField (label product)
+   , toField (toInteger $ price product)
+   , toField (discreteCurrency $ price product)
+   , toField (description product)
+   ]
 
-
+instance FromRow Product where
+  fromRow = do
+   let unitScale = scale (Proxy :: Proxy (UnitScale "EUR" "cent"))  --Used scale
+   sd <- mkSomeDiscrete <$> field <*> pure unitScale <*> field      --Function for serialization
+   case fromSomeDiscrete sd of                                      --Transformation to Maybe Discrete
+     Nothing -> fail "Currency not supported"
+     Just val -> Product <$> field <*> field <*> pure val <*> field --Product creation
 ```
 
 
 But, when we look at it, the lecture of the produced SQL schema is not that obious...
 
-What if we create a separate type for the Database and use an Generic instance instead and some mapping functions to transform our "marshallable type" from and to our domaine type.
+And we have to be careful to make lawfull instancies (`toRow . fromRow = id`, `fromRow . toRow = id`)
+
+What if we create a separate type for the Database and use an Generic instance instead? We will obiously need some mapping fonctions, but the `RecordWildCards` extension can make this easier. Let see :
 
 ```haskell
-IMPORT
-
-data ProductJSON = ProductJSON 
-  { id :: UUID
+data ProductDB = ProductDB -- This is our documentation
+  { id :: Int
   , label :: String
   , amount :: Int
   , currency :: String
   , description :: String
   } deriving Generic, FromRow, ToRow
 
-productToProductJSON :: Product -> ProductJSON
+toProductDB :: Product -> ProductDB
+toProductDB Product{..} =
+  let amount = toInteger price
+      currency = discreteCurrency price
+  in ProductDB{..}
 
-productJSONToProduct :: ProductJSON -> Product
+data Errors = NOT_SUPPORTED_CURRENCY
 
+fromProductDB :: ProductDB -> Either Errors Product -- I have a better "fail faster" way that I will talk in another article.
+fromProductDB ProductDB {..} =
+  case fromSomeDiscrete sd of
+    Nothing -> Left NOT_SUPPORTED_CURRENCY
+    Just (price :: Discrete "EUR" "cent") -> Right Product{..}
+  where unitScale = scale (Proxy :: Proxy (UnitScale "EUR" "cent"))  --Used scale
+        sd = mkSomeDiscrete currency unitScale amount
 ```
 
 Great! Now we have an _exact reprsentation_ of the produced database schema. We don't have to overload our mind to "run the algortihm" and have a mind representation of the produced schema.
 
+What if my domain type has the same exact representation than my Database schema or my JSON, I don't need a marshallable type and, don't I?
+
+Well you don't need it ... yet, but maybe you will one day. Domain tend to change over time and separate the domain from the interface could be useful. We will se in the next section. 
+
 ## Generics as an architecture design
 
-As we saw earlier, using `Generics` naturally made us separate the domain types from the interface ones. In our case `Product` and `ProductJSON`.
+As we saw earlier, using `Generics` naturally made us separate the domain types from the interface ones. In our case `Product` and `ProductDB`.
 
-Interfaces are somehow contracts with the outside world. Sometimes we have the control it, sometimes we don't. It will be easier to control a database than an API client.
+Interfaces are somehow contracts with the outside world. Sometimes we have the control on them, sometimes we don't. It will be easier to control a database than an API client, for instance.
 
-We could say that interfaces have **a stricter constraint**, because if something is changed, as little as it could be, it could broke something elsewhere... The worst of it, our beloved compiler will not even be able to notice the broken issue. :fear:
+We could say that interfaces have **a stricter constraint**, because if something is changed, as little as it could be, it could broke something elsewhere... The worst of it... our beloved compiler will not even be able to notice the broken issue. :fear:
 
-I think its a good thing to separate the domain world for the interfaces with different types. This way, it's more reassuring to change something and it is obiously easier to restraint the change scope than with a mega-type design.
+I think its a good thing to separate the domain world from the interfaces with different types. This way, it's more reassuring to change something and it is obiously easier to restraint the change scope than with a mega-type design.
 
 If you need to change something in the sensible part (interface), you will be consciously more careful to not broke _THE_ contract.
 
 ** GRAPH? **
 
-This way of designing code reminds me what Domaine Driven Development enthousiasts call **Hexagonal Architecture** (alystar article).
+This way of designing code reminds me what Domaine Driven Development enthousiasts call [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/).
 
 So `Generics` tend to help you to architecture your code while naturraly separing the interfaces from the core (domain) and make your code more layered!
 
-//Interation compilation???
+Is someday you need the change all the layers, you can easily do _incremental compilation_ by change a layer at a time.
 
 ## Generics as a lingua franca
 
-Okay, so we have the documentation, we have a neat design, what else could Generics give us?
+Okay, so we have the documentation, we have a neat design, what else could **Generics** give us?
 
-The way Generics work is that it create a ____ of the type. This ___ is useful for anyone who need to transform. 
+The way Generics work is that it creates a ____ of the type. This ___ is useful for anyone who need to do serialization. 
 
 Instead to have a mapping between the origin and the destination (for example a List to a JSON), you have a representation of it. So if you need to code a converter, it won't broke on the simple change. 
 
