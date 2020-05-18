@@ -113,7 +113,7 @@ Well you don't need it ... yet, but maybe you will one day. Domain tend to chang
 
 ## Generics as an architecture design
 
-As we saw earlier, using `Generics` naturally made us separate the domain types from the interface ones. In our case `Product` and `ProductDB`.
+As we saw earlier, using `Generics` naturally made us separate the domain from the interface. In our case `Product` and `ProductDB`.
 
 Interfaces are somehow contracts with the outside world. Sometimes we have the control on them, sometimes we don't. It will be easier to control a database than an API client, for instance.
 
@@ -137,19 +137,19 @@ Okay, so we have the documentation, we have a neat design, what else could **Gen
 
 The way Generics work is that it creates a ____ of the type. This ___ is useful for anyone who need to do serialization. 
 
-Instead to have a mapping between the origin and the destination (for example a List to a JSON), you have a representation of it. So if you need to code a converter, it won't broke on the simple change. 
+Instead of having a mapping between the origin and the destination (for example a List to a JSON), you have a representation of it. So if you need to code a converter, it won't broke on the simple change. 
 
 ### Code generator
 
-It exists a lot of code generator, specially for API client accessors.
+Many code generators working with `Generics` are availables. Particulary for API client accessors.
 
-For example, from an Haskell `Servant` API, you could generate a Purescript (LINK) or a ELM (LINK) client, and keep the type safety that we all love. But the requirement for thoses nice libraries to work is that your type need to implements `Generics`.
+For example, from an Haskell `Servant` API, you could generate a [Purescript accessors functions](https://hackage.haskell.org/package/servant-purescript) or a [ELM accessors functions](https://hackage.haskell.org/package/servant-elm) client, and keep the type safety that we all love. But the requirement for thoses nice libraries to work is that your type need to implements `Generics`.
 
 ### Swagger generator
 
-If you did work with APIs, you probably heard or used swagger(link) as an API documentation. You can obiously generate this documentation, if you implement generics with this library (LINK).
+If you did work with APIs, you probably heard or used [swagger](https://swagger.io/) as an API documentation. You can obiously generate this documentation, if you implement generics with [servant-swagger](https://github.com/haskell-servant/servant-swagger).
 
-BUT! Another nice thing about Swagger is that its shared in the whole community, technologicallywise. So if you setup a public API with Swagger, your client could generate their accessors (LINK), even in non FP technologies.
+BUT! Another nice thing about Swagger is that its shared by the whole community, technologicallywise. So if you setup a public API with Swagger, anyone who wants to use it generate their [accessors](https://github.com/swagger-api/swagger-codegen), even in non FP technologies.
 
 In the API world, `Generics` give you a lingua franca for your client! 
 
@@ -158,8 +158,8 @@ In the API world, `Generics` give you a lingua franca for your client!
 In summary, in addition of being a **boilerplate saver**, `Generics` give you a lot a other nice features, such as : 
 
 - Direct interface documentation in your code (any kind of interface).
-- Some robus client accessor code generators (API). LINK
-- A Swagger documentation generator (API). LINK
-- And once you have a Swagger documentation, you have a lingua franca for any other technology that needs to access your API.
+- Some robus client accessor code generators (API). 
+- A Swagger documentation generator ([servant-swagger](https://github.com/haskell-servant/servant-swagger))
+- And once you have a Swagger documentation, you have a [lingua franca](https://github.com/swagger-api/swagger-codegen) for any other technology that needs to access your API.
 
-I am sure there are some cases where `Generics` are not the best options for an interface implement, but most of the time, theses advantages worth to think about it before implementing a custom convertor.
+I am sure there are some cases where `Generics` are not the best options for an interface implemention, but most of the time, theses advantages worth to think about it before implementing a custom convertor.

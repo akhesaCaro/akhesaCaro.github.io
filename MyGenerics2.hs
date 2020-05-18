@@ -36,7 +36,7 @@ data Product =
             , description :: Text
             } deriving Show
 
-data ProductJSON = ProductJSON
+data ProductDB = ProductDB
   { productId :: Int
   , label :: Text
   , amount :: Integer
@@ -44,16 +44,16 @@ data ProductJSON = ProductJSON
   , description :: Text
   } deriving (Generic, FromRow, ToRow)
 
-toProductJSON :: Product -> ProductJSON
-toProductJSON Product{..} =
+toProductDB :: Product -> ProductDB
+toProductDB Product{..} =
   let amount = toInteger price
       currency = discreteCurrency price
-  in ProductJSON{..}
+  in ProductDB{..}
 
 data Errors = NOT_SUPPORTED_CURRENCY
 
-fromProductJSON :: ProductJSON -> Either Errors Product -- I have a better "fail faster" way that I will talk in another article.
-fromProductJSON ProductJSON {..} =
+fromProductDB :: ProductDB -> Either Errors Product -- I have a better "fail faster" way that I will talk in another article.
+fromProductDB ProductDB {..} =
   case fromSomeDiscrete sd of
     Nothing -> Left NOT_SUPPORTED_CURRENCY
     Just (price :: Discrete "EUR" "cent") -> Right Product{..}
