@@ -1,17 +1,26 @@
 # Generics
 
+Generics in Haskell are a mechanism through which datatype can “expose” their internal structure, allowing programmers to write functions operating on (almost) arbitrarily-shaped data. Tons [lien] and tons [lien] of articles have been written on how generics work. 
 
-When I say `Generics`, you probably think "boilerplate saver". Its true, `Generics` could avoid you a lot of work when you need to serialize a type to communicate outside your application. But, what if `Generics` give us more than that?
+In this article, we will instead focus on how they can be used, and the benefits for your code.»
+You probably think of Generics as boilerplate savers, but it is more than that. Generics can help you gain a self maintained documentation, robustess on your code and a nice layered archtecture.
 
-`Generics` can be seen as a good way to document your interface, to have a code generator for your client or just a way to put amore architecture by separating the domain from the interfaces.
+## Generics for ...
 
-However, this article is not about how the `Generics` work, but about the many and very useful "side effects" that you gain using them.
+As Haskellers, one of our main goal is to model the domain as close as possible with types. But unfortunatly, the well designed domain must interact with the outside world... and this world, we sometimes don't have any control on it.
 
-## Generics for Documentation
+For example, imagine we have a legacy PostgreSQL database to interact with. The database store products, these products have a price, and this price need to deal with different currencies. The table looks like this : 
 
-To be efficient, the type implementing the `Generic` instance must be as close as possible to the wanted representation.
+```Sql
+CREATE TABLE product (
+    id SERIAL PRIMARY KEY,
+    label text NOT NULL,
+    price_in_cent integer NOT NULL,
+    currency text NOT NULL
+);
+```
 
-For example, imagine we have a _product_ with a _price_ with its _currency_ in our domain and we use the [safe-money library](htytps://ren.zone/articles/safe-money) to represent it.
+We chose to model this `Product` with the [safe-money library](htytps://ren.zone/articles/safe-money) library, for instance.
 
 
 ```Haskell
@@ -35,22 +44,11 @@ data Product =
             }
 
 ```
+To interact with the database, let say we are using [postgresql-simple](https://hackage.haskell.org/package/postgresql-simple-0.6.2/docs/Database-PostgreSQL-Simple.html).
 
-Now we need to store this record into a Database. Let say that we have a `PostgreSQL` database and we are using [postgresql-simple](https://hackage.haskell.org/package/postgresql-simple-0.6.2/docs/Database-PostgreSQL-Simple.html).
+The `Discrete` will need to be splitted to be stored as 2 differents columns, _amount_ and the _currency_, as our database requires.
 
-But the `Dense` type contains 2 **essentials** information that we need to store : The _amount_ **and** the _currency_.
-We are going to need 2 columns in our database : 
-
-```Sql
-CREATE TABLE product (
-    id SERIAL PRIMARY KEY,
-    label text NOT NULL,
-    price_in_cent integer NOT NULL,
-    currency text NOT NULL
-);
-```
-We will need a `FromRow` and `ToRow` instance for our type. We could write a custom implementation for our `Product` type.
-
+We could write custom `FromRow` and `ToRow` instances for our `Product` to be able to split it.
 
 ```Haskell
 {-# LANGUAGE DataKinds #-}
@@ -76,12 +74,67 @@ instance FromRow Product where
      Just val -> Product <$> field <*> field <*> pure val <*> field --Product creation
 ```
 
+But we have 2 problems here : 
 
-But, when we look at it, the lecture of the produced SQL schema is not that obious...
+1. First of all, when we look at the custom instanciations, the produced SQL schema is not that obious... and as programmer I will probably have to check the database script each time I need t have a mind representation of the interface.
+2. Second, and probably worst, I have no garantie that my two instanciations are in phase. Remember the two functions must follow identity laws : (`fromRow . toRow <=> id`) and (`toRow . fromRow <=> id`). If you are not convinced that such error could occur, I did myself make that mistake by writing this article. Imagine on a very complex code... 
 
-And we have to be careful to make lawfull instancies (`toRow . fromRow = id`, `fromRow . toRow = id`)
 
-What if we create a separate type for the Database and use an Generic instance instead? We will obiously need some mapping fonctions, but the `RecordWildCards` extension can make this easier. Let see :
+## ... documentation
+
+To solve the first problem, I could probably create a **separate type** for the serialization to have a more self contained documentation. The splitting could be helded by the mapping functions.
+
+
+```haskell
+{-# LANGUAGE DataKinds #-}
+
+data ProductDB = ProductDB 
+  { id :: Int
+  , label :: Text
+  , amount :: Integer
+  , currency :: Text
+  , description :: Text
+  }
+
+toProductDB :: Product -> ProductDB
+toProductDB Product{..} =
+  let amount = toInteger price
+      currency = discreteCurrency price
+  in ProductDB{..}
+  
+
+data Errors = NOT_SUPPORTED_CURRENCY
+
+fromProductDB :: ProductDB -> Either Errors Product -- I have a better "fail faster" way that I will talk in another article.
+fromProductDB ProductDB {..} =
+  case fromSomeDiscrete sd of
+    Nothing -> Left NOT_SUPPORTED_CURRENCY
+    Just (price :: Discrete "EUR" "cent") -> Right Product{..}
+  where unitScale = scale (Proxy :: Proxy (UnitScale "EUR" "cent"))  --Used scale
+        sd = mkSomeDiscrete currency unitScale amount
+
+instance ToRow ProductDB where
+ toRow product =
+   [ toField (productId product)
+   , toField (label product)
+   , toField (toInteger $ price product)
+   , toField (discreteCurrency $ price product)
+   , toField (description product)
+   ]
+
+instance FromRow ProductDB where
+  fromRow = ProductDB <$> field <*> field <*> field <*> field <*> field
+```
+
+Great, we have our self-documented type now, it solves the first problem, does it?. 
+
+Not really.. a time constraint or lazy programmer may have edited the instanciations without changing the type.
+
+And we still have the second problem, this type doesn't guarantees robustness of our instanciations.
+
+## ... documentation AND robustness
+
+If we use _`Generic`_ and a _separate type_ we solve both problems with the same shot. 
 
 ```haskell
 data ProductDB = ProductDB -- This is our documentation
@@ -111,9 +164,10 @@ fromProductDB ProductDB {..} =
 
 Great! Now we have an _exact reprsentation_ of the produced database schema. We don't have to overload our mind to "run the algortihm" to have a representation of the produced schema.
 
-What if my domain type has the same exact representation than my Database schema or my JSON, I don't need a marshallable type, don't I?
 
-Well you don't need it ... yet, but maybe you will one day. Domain tend to change over time and separate the domain from the interface could be useful. 
+But... What if my domain type has the same exact representation than my Database schema or my JSON, I don't need a marshallable type, don't I?
+
+Well you don't need it ... yet, but maybe you will one day. Domain tend to change over time and separate the domain from the interface as soon as possible could avoid you a lot of problems. 
 
 ## Generics as an architecture design
 
@@ -139,7 +193,7 @@ If someday you need the change all the layers, you can easily do _incremental co
 
 Okay, so we have the documentation, we have a neat design, what else could **Generics** give us?
 
-The way Generics work is that it creates a **structure representation** of the type. Instead of parsin the type and give de correspondance, it gives a "description" of the type. Code converter using `Generics` are more robust to changes. 
+The way Generics work is that it creates a **structure representation** of the type. Instead of parsin the type and give the correspondance, it gives a "description" of the type.
 
 ### Code generator
 
